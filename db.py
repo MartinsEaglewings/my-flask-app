@@ -7,13 +7,13 @@ def get_db():
     db_url = os.environ.get('DATABASE_URL')
     
     if db_url:
-        # Render PostgreSQL Connection
+        # PostgreSQL on Render (returns dict rows via RealDictCursor)
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
-        conn = psycopg2.connect(db_url, sslmode='require')
+        conn = psycopg2.connect(db_url, sslmode='require', cursor_factory=RealDictCursor)
         return conn, 'postgres'
     else:
-        # Local SQLite Connection for Termux
+        # SQLite locally (returns dict rows via sqlite3.Row)
         conn = sqlite3.connect('app.db')
         conn.row_factory = sqlite3.Row
         return conn, 'sqlite'
@@ -23,7 +23,6 @@ def init_db():
     cursor = conn.cursor()
     
     if db_type == 'postgres':
-        # PostgreSQL Schema
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -52,7 +51,6 @@ def init_db():
             );
         ''')
     else:
-        # SQLite Schema
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,4 +84,4 @@ def init_db():
 
 if __name__ == '__main__':
     init_db()
-    print("Database tables verified successfully!")
+    print("Database verification complete!")
