@@ -5,10 +5,12 @@ from db import init_db, get_db
 
 app = Flask(__name__)
 
-# Initialize DB tables automatically on startup
-init_db()
+# Verify tables exist on boot
+try:
+    init_db()
+except Exception as e:
+    print(f"DB Init Warning: {e}")
 
-# Session Settings
 app.secret_key = os.environ.get('SECRET_KEY', 'martins_dematrix_secure_key_2026')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -17,6 +19,36 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30
 @app.before_request
 def make_session_permanent():
     session.permanent = True
+
+def query_one(sql, params=()):
+    conn, db_type = get_db()
+    cursor = conn.cursor()
+    if db_type == 'postgres':
+        sql = sql.replace('?', '%s')
+    cursor.execute(sql, params)
+    res = cursor.fetchone()
+    conn.close()
+    return dict(res) if res else None
+
+def query_all(sql, params=()):
+    conn, db_type = get_db()
+    cursor = conn.cursor()
+    if db_type == 'postgres':
+        sql = sql.replace('?', '%s')
+    cursor.execute(sql, params)
+    res = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in res] if res else []
+
+def execute_db(sql, params=()):
+    conn, db_type = get_db()
+    cursor = conn.cursor()
+    if db_type == 'postgres':
+        sql = sql.replace('?', '%s')
+    cursor.execute(sql, params)
+    if db_type == 'sqlite':
+        conn.commit()
+    conn.close()
 
 # --- Routes ---
 
@@ -38,21 +70,15 @@ def signup():
             return render_template('signup.html')
 
         hashed_password = generate_password_hash(password)
-        conn, db_type = get_db()
-        cursor = conn.cursor()
         
         try:
-            placeholder = "%s" if db_type == 'postgres' else "?"
-            cursor.execute(
-                f"INSERT INTO users (username, password, balance, is_admin) VALUES ({placeholder}, {placeholder}, 0.0, 0)",
+            execute_db(
+                "INSERT INTO users (username, password, balance, is_admin) VALUES (?, ?, 0.0, 0)",
                 (username, hashed_password)
             )
-            conn.commit()
-            conn.close()
             flash("Account created successfully! Please log in.")
             return redirect(url_for('login'))
         except Exception:
-            conn.close()
             flash("Username already exists or an error occurred.")
             
     return render_template('signup.html')
@@ -63,22 +89,13 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        conn, db_type = get_db()
-        cursor = conn.cursor()
-        
-        placeholder = "%s" if db_type == 'postgres' else "?"
-        cursor.execute(f"SELECT * FROM users WHERE username = {placeholder}", (username,))
-        user = cursor.fetchone()
-        conn.close()
+        user = query_one("SELECT * FROM users WHERE username = ?", (username,))
 
         if user:
-            # Handle dictionary access safely for both Postgres & SQLite
-            user_id = user['id']
             stored_pwd = user['password']
-            
             if check_password_hash(stored_pwd, password) or stored_pwd == password:
-                session['user_id'] = user_id
-                session['username'] = username
+                session['user_id'] = user['id']
+                session['username'] = user['username']
                 return redirect(url_for('dashboard'))
             
         flash("Invalid username or password.")
@@ -90,13 +107,11 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
         
-    conn, db_type = get_db()
-    cursor = conn.cursor()
-    placeholder = "%s" if db_type == 'postgres' else "?"
-    cursor.execute(f"SELECT * FROM users WHERE id = {placeholder}", (session['user_id'],))
-    user = cursor.fetchone()
-    conn.close()
-    
+    user = query_one("SELECT * FROM users WHERE id = ?", (session['user_id'],))
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+        
     return render_template('dashboard.html', user=user, username=session.get('username'))
 
 @app.route('/tasks')
@@ -104,12 +119,7 @@ def tasks():
     if 'user_id' not in session:
         return redirect(url_for('login'))
         
-    conn, db_type = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tasks")
-    tasks_list = cursor.fetchall()
-    conn.close()
-    
+    tasks_list = query_all("SELECT * FROM tasks")
     return render_template('tasks.html', tasks=tasks_list)
 
 @app.route('/logout')

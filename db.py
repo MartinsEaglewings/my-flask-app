@@ -7,13 +7,12 @@ def get_db():
     db_url = os.environ.get('DATABASE_URL')
     
     if db_url:
-        # PostgreSQL on Render (returns dict rows via RealDictCursor)
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
         conn = psycopg2.connect(db_url, sslmode='require', cursor_factory=RealDictCursor)
+        conn.autocommit = True
         return conn, 'postgres'
     else:
-        # SQLite locally (returns dict rows via sqlite3.Row)
         conn = sqlite3.connect('app.db')
         conn.row_factory = sqlite3.Row
         return conn, 'sqlite'
@@ -78,10 +77,8 @@ def init_db():
                 description TEXT
             );
         ''')
-        
-    conn.commit()
+        conn.commit()
     conn.close()
 
 if __name__ == '__main__':
     init_db()
-    print("Database verification complete!")
