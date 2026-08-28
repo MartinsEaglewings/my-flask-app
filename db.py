@@ -25,8 +25,8 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                username VARCHAR(80) UNIQUE NOT NULL,
-                password VARCHAR(200) NOT NULL,
+                username VARCHAR(150) UNIQUE NOT NULL,
+                password TEXT NOT NULL,
                 balance DOUBLE PRECISION DEFAULT 0.0,
                 is_admin INTEGER DEFAULT 0
             );

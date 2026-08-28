@@ -5,7 +5,6 @@ from db import init_db, get_db
 
 app = Flask(__name__)
 
-# Verify tables exist on boot
 try:
     init_db()
 except Exception as e:
@@ -74,8 +73,8 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
         
         if not username or not password:
             flash("Username and password are required.")
@@ -90,7 +89,8 @@ def signup():
             )
             flash("Account created successfully! Please log in.")
             return redirect(url_for('login'))
-        except Exception:
+        except Exception as e:
+            print(f"Signup Exception: {e}")
             flash("Username already exists or an error occurred.")
             
     return render_template('signup.html')
@@ -98,10 +98,10 @@ def signup():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
         
-        user = query_one("SELECT * FROM users WHERE username = ?", (username,))
+        user = query_one("SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,))
 
         if user:
             stored_pwd = user.get('password', '')
@@ -124,7 +124,6 @@ def dashboard():
         session.clear()
         return redirect(url_for('login'))
         
-    # Standardize dictionary fields to prevent missing key errors in templates
     user_data = {
         'id': user.get('id'),
         'username': user.get('username', session.get('username')),
