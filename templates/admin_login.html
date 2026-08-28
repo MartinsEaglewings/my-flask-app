@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <title>System Access</title>
+</head>
+<body>
+    <div class="container" style="max-width:350px; margin-top:50px; padding: 20px;">
+        <h3>Admin Authentication</h3>
+        {% if error %}
+            <p style="color: #ef4444;">{{ error }}</p>
+        {% endif %}
+        <form method="POST" action="/admin/login">
+            <label style="display:block; margin-bottom:6px;">Security Key</label>
+            <input type="password" name="admin_key" placeholder="Enter key" required style="width:100%; padding:8px; margin-bottom:12px;">
+            <button type="submit" style="width:100%; padding:8px;">Authenticate</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <title>Withdraw Funds</title>
+</head>
+<body>
+    <div class="container">
+        <h2>Request Withdrawal</h2>
+        
+        <div class="card">
+            <small style="color:var(--text-sub)">Available for Withdrawal</small>
+            <div class="balance-val">${{ "%.2f"|format(balances.available_balance) }}</div>
+        </div>
+
+        <div class="card">
+            <form method="POST">
+                <label>Amount ($)</label>
+                <input type="number" step="0.01" name="amount" placeholder="0.00" required>
+                
+                <label>Payment Method</label>
+                <select name="payment_method" required>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Crypto (USDT)">Crypto (USDT)</option>
+                    <option value="Mobile Money">Mobile Money</option>
+                </select>
+
+                <label>Account / Wallet Details</label>
+                <input type="text" name="account_details" placeholder="Account Number / Wallet Address" required>
+
+                <button type="submit">Submit Request</button>
+            </form>
+        </div>
+
+        <h3>Withdrawal History</h3>
+        {% for w in history %}
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div><strong>${{ "%.2f"|format(w.amount) }}</strong> (Net: ${{ "%.2f"|format(w.net_amount) }})</div>
+                <small style="color:var(--text-sub)">{{ w.payment_method }} • {{ w.created_at }}</small>
+            </div>
+            <div>
+                <span style="text-transform:capitalize; font-size:0.85rem; padding:4px 8px; border-radius:4px; background:var(--border);">
+                    {{ w.status }}
+                </span>
+            </div>
+        </div>
+        {% else %}
+        <p>No withdrawal requests yet.</p>
+        {% endfor %}
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/tasks">Tasks</a>
+        <a href="/withdrawals" class="active">Withdraw</a>
+        <a href="/logout">Logout</a>
+    </nav>
+</body>
+</html>

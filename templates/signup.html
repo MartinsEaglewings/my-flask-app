@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <title>Sign Up</title>
+</head>
+<body>
+    <div class="container" style="max-width: 400px; margin: 40px auto; padding: 20px;">
+        <h2>Create Account</h2>
+        {% if error %}<p style="color:#ef4444; font-weight:bold;">{{ error }}</p>{% endif %}
+        <form method="POST" action="/signup">
+            <div style="margin-bottom: 12px;">
+                <label>Username</label>
+                <input type="text" name="username" required style="width:100%; padding:8px; margin-top:4px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label>Email</label>
+                <input type="email" name="email" required style="width:100%; padding:8px; margin-top:4px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label>Password</label>
+                <input type="password" name="password" required style="width:100%; padding:8px; margin-top:4px;">
+            </div>
+            <button type="submit" style="width:100%; padding:10px; margin-top:10px;">Sign Up</button>
+        </form>
+        <p style="margin-top:15px; text-align:center;">
+            Already have an account? <a href="/login">Login</a>
+        </p>
+    </div>
+</body>
+</html>

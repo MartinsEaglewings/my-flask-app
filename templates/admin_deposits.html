@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <title>Admin - Approve Deposits</title>
+</head>
+<body>
+    <div class="container" style="padding: 20px; max-width: 700px; margin: 0 auto;">
+        <h2>Pending User Deposits</h2>
+        <a href="/dashboard" style="color: #94a3b8; text-decoration: none;">← Back to Dashboard</a>
+        <br><br>
+
+        {% if deposits %}
+        <table style="width: 100%; border-collapse: collapse; background: #1e293b; color: #fff; border-radius: 8px; overflow: hidden;">
+            <thead>
+                <tr style="background: #0f172a; text-align: left;">
+                    <th style="padding: 12px;">User</th>
+                    <th style="padding: 12px;">Amount</th>
+                    <th style="padding: 12px;">Proof / Ref</th>
+                    <th style="padding: 12px;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dep in deposits %}
+                <tr style="border-bottom: 1px solid #334155;">
+                    <td style="padding: 12px;">{{ dep.username }}</td>
+                    <td style="padding: 12px; color: #22c55e; font-weight: bold;">₦{{ "%.2f"|format(dep.amount) }}</td>
+                    <td style="padding: 12px;">{{ dep.description }}</td>
+                    <td style="padding: 12px;">
+                        <form action="/admin/approve_deposit/{{ dep.id }}" method="POST">
+                            <button type="submit" style="background: #22c55e; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Approve & Credit</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #94a3b8;">No pending deposits right now.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
