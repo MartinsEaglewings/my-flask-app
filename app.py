@@ -23,32 +23,44 @@ def make_session_permanent():
 def query_one(sql, params=()):
     conn, db_type = get_db()
     cursor = conn.cursor()
-    if db_type == 'postgres':
-        sql = sql.replace('?', '%s')
-    cursor.execute(sql, params)
-    res = cursor.fetchone()
-    conn.close()
-    return dict(res) if res else None
+    try:
+        if db_type == 'postgres':
+            sql = sql.replace('?', '%s')
+        cursor.execute(sql, params)
+        res = cursor.fetchone()
+        return dict(res) if res else None
+    except Exception as e:
+        print(f"Database Query Error: {e}")
+        return None
+    finally:
+        conn.close()
 
 def query_all(sql, params=()):
     conn, db_type = get_db()
     cursor = conn.cursor()
-    if db_type == 'postgres':
-        sql = sql.replace('?', '%s')
-    cursor.execute(sql, params)
-    res = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in res] if res else []
+    try:
+        if db_type == 'postgres':
+            sql = sql.replace('?', '%s')
+        cursor.execute(sql, params)
+        res = cursor.fetchall()
+        return [dict(r) for r in res] if res else []
+    except Exception as e:
+        print(f"Database Query Error: {e}")
+        return []
+    finally:
+        conn.close()
 
 def execute_db(sql, params=()):
     conn, db_type = get_db()
     cursor = conn.cursor()
-    if db_type == 'postgres':
-        sql = sql.replace('?', '%s')
-    cursor.execute(sql, params)
-    if db_type == 'sqlite':
-        conn.commit()
-    conn.close()
+    try:
+        if db_type == 'postgres':
+            sql = sql.replace('?', '%s')
+        cursor.execute(sql, params)
+        if db_type == 'sqlite':
+            conn.commit()
+    finally:
+        conn.close()
 
 # --- Routes ---
 
@@ -92,10 +104,10 @@ def login():
         user = query_one("SELECT * FROM users WHERE username = ?", (username,))
 
         if user:
-            stored_pwd = user['password']
+            stored_pwd = user.get('password', '')
             if check_password_hash(stored_pwd, password) or stored_pwd == password:
-                session['user_id'] = user['id']
-                session['username'] = user['username']
+                session['user_id'] = user.get('id')
+                session['username'] = user.get('username')
                 return redirect(url_for('dashboard'))
             
         flash("Invalid username or password.")
@@ -112,7 +124,15 @@ def dashboard():
         session.clear()
         return redirect(url_for('login'))
         
-    return render_template('dashboard.html', user=user, username=session.get('username'))
+    # Standardize dictionary fields to prevent missing key errors in templates
+    user_data = {
+        'id': user.get('id'),
+        'username': user.get('username', session.get('username')),
+        'balance': float(user.get('balance', 0.0) or 0.0),
+        'is_admin': user.get('is_admin', 0)
+    }
+    
+    return render_template('dashboard.html', user=user_data, username=user_data['username'])
 
 @app.route('/tasks')
 def tasks():
