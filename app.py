@@ -1,14 +1,17 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+import sys
+import traceback
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from db import init_db, get_db
 
 app = Flask(__name__)
 
+# Run DB Initialization safely
 try:
     init_db()
 except Exception as e:
-    print(f"DB Init Warning: {e}")
+    print(f"DB Init Exception: {e}", file=sys.stderr)
 
 app.secret_key = os.environ.get('SECRET_KEY', 'martins_dematrix_secure_key_2026')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -33,7 +36,7 @@ def query_one(sql, params=()):
         res = cursor.fetchone()
         return dict(res) if res else None
     except Exception as e:
-        print(f"Database Query Error: {e}")
+        print(f"Database Query One Error: {e}", file=sys.stderr)
         return None
     finally:
         conn.close()
@@ -48,7 +51,7 @@ def query_all(sql, params=()):
         res = cursor.fetchall()
         return [dict(r) for r in res] if res else []
     except Exception as e:
-        print(f"Database Query Error: {e}")
+        print(f"Database Query All Error: {e}", file=sys.stderr)
         return []
     finally:
         conn.close()
@@ -60,10 +63,31 @@ def execute_db(sql, params=()):
         if db_type == 'postgres':
             sql = sql.replace('?', '%s')
         cursor.execute(sql, params)
-        if db_type == 'sqlite':
-            conn.commit()
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Database Execute Error: {e}", file=sys.stderr)
+        raise e
     finally:
         conn.close()
+
+# --- Emergency Diagnostics Route ---
+@app.route('/debug-db')
+def debug_db():
+    try:
+        conn, db_type = get_db()
+        cursor = conn.cursor()
+        table = get_table_name('users')
+        if db_type == 'postgres':
+            cursor.execute(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table}';")
+        else:
+            cursor.execute(f"PRAGMA table_info({table});")
+        cols = cursor.fetchall()
+        conn.close()
+        return jsonify({"status": "success", "db_type": db_type, "columns": [dict(c) if isinstance(c, dict) else c for c in cols]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e), "traceback": traceback.format_exc()})
 
 # --- Routes ---
 
@@ -95,8 +119,8 @@ def signup():
             flash("Account created successfully! Please log in.")
             return redirect(url_for('login'))
         except Exception as e:
-            print(f"Signup Exception: {e}")
-            flash("Username already exists or an error occurred.")
+            print(f"Signup Exception Trace: {traceback.format_exc()}", file=sys.stderr)
+            flash("Username already exists or a database error occurred.")
             
     return render_template('signup.html')
 
