@@ -23,7 +23,7 @@ def init_db():
     
     if db_type == 'postgres':
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS app2_users (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(150) UNIQUE NOT NULL,
                 password TEXT NOT NULL,
@@ -32,7 +32,7 @@ def init_db():
             );
         ''')
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS tasks (
+            CREATE TABLE IF NOT EXISTS app2_tasks (
                 id SERIAL PRIMARY KEY,
                 title VARCHAR(150) NOT NULL,
                 description TEXT,
@@ -40,9 +40,9 @@ def init_db():
             );
         ''')
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS transactions (
+            CREATE TABLE IF NOT EXISTS app2_transactions (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id),
+                user_id INTEGER REFERENCES app2_users(id),
                 amount DOUBLE PRECISION,
                 tx_type VARCHAR(50),
                 status VARCHAR(50),

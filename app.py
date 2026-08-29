@@ -19,6 +19,10 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30
 def make_session_permanent():
     session.permanent = True
 
+def get_table_name(base_name):
+    _, db_type = get_db()
+    return f"app2_{base_name}" if db_type == 'postgres' else base_name
+
 def query_one(sql, params=()):
     conn, db_type = get_db()
     cursor = conn.cursor()
@@ -81,10 +85,11 @@ def signup():
             return render_template('signup.html')
 
         hashed_password = generate_password_hash(password)
+        table = get_table_name('users')
         
         try:
             execute_db(
-                "INSERT INTO users (username, password, balance, is_admin) VALUES (?, ?, 0.0, 0)",
+                f"INSERT INTO {table} (username, password, balance, is_admin) VALUES (?, ?, 0.0, 0)",
                 (username, hashed_password)
             )
             flash("Account created successfully! Please log in.")
@@ -101,13 +106,13 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         
-        user = query_one("SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,))
+        table = get_table_name('users')
+        user = query_one(f"SELECT * FROM {table} WHERE LOWER(username) = LOWER(?)", (username,))
 
         if user:
             stored_pwd = str(user.get('password', ''))
             is_valid = False
             
-            # Safe authentication fallback for hashed or plain passwords
             try:
                 if stored_pwd and check_password_hash(stored_pwd, password):
                     is_valid = True
@@ -131,7 +136,8 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
         
-    user = query_one("SELECT * FROM users WHERE id = ?", (session['user_id'],))
+    table = get_table_name('users')
+    user = query_one(f"SELECT * FROM {table} WHERE id = ?", (session['user_id'],))
     if not user:
         session.clear()
         return redirect(url_for('login'))
@@ -150,7 +156,8 @@ def tasks():
     if 'user_id' not in session:
         return redirect(url_for('login'))
         
-    tasks_list = query_all("SELECT * FROM tasks")
+    table = get_table_name('tasks')
+    tasks_list = query_all(f"SELECT * FROM {table}")
     return render_template('tasks.html', tasks=tasks_list)
 
 @app.route('/logout')
