@@ -104,8 +104,20 @@ def login():
         user = query_one("SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,))
 
         if user:
-            stored_pwd = user.get('password', '')
-            if check_password_hash(stored_pwd, password) or stored_pwd == password:
+            stored_pwd = str(user.get('password', ''))
+            is_valid = False
+            
+            # Safe authentication fallback for hashed or plain passwords
+            try:
+                if stored_pwd and check_password_hash(stored_pwd, password):
+                    is_valid = True
+            except Exception:
+                pass
+                
+            if not is_valid and stored_pwd == password:
+                is_valid = True
+
+            if is_valid:
                 session['user_id'] = user.get('id')
                 session['username'] = user.get('username')
                 return redirect(url_for('dashboard'))
