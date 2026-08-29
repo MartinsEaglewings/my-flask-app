@@ -3,17 +3,18 @@ import sys
 import traceback
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
-from db import init_db, get_db
+from psycopg2.extras import RealDictCursor
+from db import init_db, get_db, release_db
 
 app = Flask(__name__)
 
-# Run DB Initialization safely
+# Fast Startup Init
 try:
     init_db()
 except Exception as e:
     print(f"DB Init Exception: {e}", file=sys.stderr)
 
-app.secret_key = os.environ.get('SECRET_KEY', 'martins_dematrix_secure_key_2026')
+app.secret_key = os.environ.get('SECRET_KEY', 'martins_dematrix_fast_key_2026')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30
@@ -22,74 +23,41 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30
 def make_session_permanent():
     session.permanent = True
 
-def get_table_name(base_name):
-    _, db_type = get_db()
-    return f"app2_{base_name}" if db_type == 'postgres' else base_name
-
-def query_one(sql, params=()):
+def execute_query(sql, params=(), fetch_one=False, fetch_all=False, commit=False):
     conn, db_type = get_db()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=RealDictCursor) if db_type == 'postgres' else conn.cursor()
+    result = None
     try:
         if db_type == 'postgres':
             sql = sql.replace('?', '%s')
+        
         cursor.execute(sql, params)
-        res = cursor.fetchone()
-        return dict(res) if res else None
+        
+        if commit:
+            conn.commit()
+        if fetch_one:
+            res = cursor.fetchone()
+            result = dict(res) if res else None
+        elif fetch_all:
+            res = cursor.fetchall()
+            result = [dict(r) for r in res] if res else []
     except Exception as e:
-        print(f"Database Query One Error: {e}", file=sys.stderr)
-        return None
-    finally:
-        conn.close()
-
-def query_all(sql, params=()):
-    conn, db_type = get_db()
-    cursor = conn.cursor()
-    try:
-        if db_type == 'postgres':
-            sql = sql.replace('?', '%s')
-        cursor.execute(sql, params)
-        res = cursor.fetchall()
-        return [dict(r) for r in res] if res else []
-    except Exception as e:
-        print(f"Database Query All Error: {e}", file=sys.stderr)
-        return []
-    finally:
-        conn.close()
-
-def execute_db(sql, params=()):
-    conn, db_type = get_db()
-    cursor = conn.cursor()
-    try:
-        if db_type == 'postgres':
-            sql = sql.replace('?', '%s')
-        cursor.execute(sql, params)
-        conn.commit()
-    except Exception as e:
-        if conn:
+        if conn and commit:
             conn.rollback()
-        print(f"Database Execute Error: {e}", file=sys.stderr)
+        print(f"Database Query Error: {e}", file=sys.stderr)
         raise e
     finally:
-        conn.close()
+        release_db(conn, db_type)
+    return result
 
-# --- Emergency Diagnostics Route ---
-@app.route('/debug-db')
-def debug_db():
+@app.route('/health')
+def health():
     try:
         conn, db_type = get_db()
-        cursor = conn.cursor()
-        table = get_table_name('users')
-        if db_type == 'postgres':
-            cursor.execute(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table}';")
-        else:
-            cursor.execute(f"PRAGMA table_info({table});")
-        cols = cursor.fetchall()
-        conn.close()
-        return jsonify({"status": "success", "db_type": db_type, "columns": [dict(c) if isinstance(c, dict) else c for c in cols]})
+        release_db(conn, db_type)
+        return jsonify({"status": "healthy", "database": db_type})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e), "traceback": traceback.format_exc()})
-
-# --- Routes ---
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route('/')
 def index():
@@ -109,18 +77,18 @@ def signup():
             return render_template('signup.html')
 
         hashed_password = generate_password_hash(password)
-        table = get_table_name('users')
         
         try:
-            execute_db(
-                f"INSERT INTO {table} (username, password, balance, is_admin) VALUES (?, ?, 0.0, 0)",
-                (username, hashed_password)
+            execute_query(
+                "INSERT INTO users (username, password, balance, is_admin) VALUES (?, ?, 0.0, 0)",
+                (username, hashed_password),
+                commit=True
             )
             flash("Account created successfully! Please log in.")
             return redirect(url_for('login'))
         except Exception as e:
-            print(f"Signup Exception Trace: {traceback.format_exc()}", file=sys.stderr)
-            flash("Username already exists or a database error occurred.")
+            print(f"Signup Error: {traceback.format_exc()}", file=sys.stderr)
+            flash("Username already exists or database connection failed.")
             
     return render_template('signup.html')
 
@@ -130,23 +98,15 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         
-        table = get_table_name('users')
-        user = query_one(f"SELECT * FROM {table} WHERE LOWER(username) = LOWER(?)", (username,))
+        user = execute_query(
+            "SELECT * FROM users WHERE LOWER(username) = LOWER(?)",
+            (username,),
+            fetch_one=True
+        )
 
         if user:
             stored_pwd = str(user.get('password', ''))
-            is_valid = False
-            
-            try:
-                if stored_pwd and check_password_hash(stored_pwd, password):
-                    is_valid = True
-            except Exception:
-                pass
-                
-            if not is_valid and stored_pwd == password:
-                is_valid = True
-
-            if is_valid:
+            if check_password_hash(stored_pwd, password):
                 session['user_id'] = user.get('id')
                 session['username'] = user.get('username')
                 return redirect(url_for('dashboard'))
@@ -160,8 +120,12 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
         
-    table = get_table_name('users')
-    user = query_one(f"SELECT * FROM {table} WHERE id = ?", (session['user_id'],))
+    user = execute_query(
+        "SELECT * FROM users WHERE id = ?",
+        (session['user_id'],),
+        fetch_one=True
+    )
+    
     if not user:
         session.clear()
         return redirect(url_for('login'))
@@ -180,8 +144,7 @@ def tasks():
     if 'user_id' not in session:
         return redirect(url_for('login'))
         
-    table = get_table_name('tasks')
-    tasks_list = query_all(f"SELECT * FROM {table}")
+    tasks_list = execute_query("SELECT * FROM tasks", fetch_all=True)
     return render_template('tasks.html', tasks=tasks_list)
 
 @app.route('/logout')
